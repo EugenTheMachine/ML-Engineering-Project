@@ -1,0 +1,56 @@
+# python -m pip install pre-commit
+# pre-commit install --config .githooks.yml
+# pre-commit install --config .githooks.yml --hook-type commit-msg
+---
+default_stages: [pre-commit]
+
+repos:
+  # Set the list of basic git hooks to find and fix common problems in the current working tree.
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: f71fa2c1f9cf5cb705f73dffe4b21f7c61470ba9
+    hooks:
+      - id: check-added-large-files
+      - id: check-executables-have-shebangs
+      - id: check-toml
+      - id: check-yaml
+      - id: debug-statements
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  # Apply the code formatting tool to maintain a consistent style across the code base.
+  - repo: https://github.com/psf/black
+    rev: 193ee766ca496871f93621d6b58d57a6564ff81b
+    hooks:
+      - id: black
+        language_version: python3
+
+  - repo: https://github.com/pycqa/isort
+    rev: dbf82f2dd09ae41d9355bcd7ab69187a19e6bf2f
+    hooks:
+      - id: isort
+        language_version: python3
+
+  # Use the static code checker to find and fix logical errors in python source code.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: b9787ef94f0d06972b93b36730548f0d928f26f9
+    hooks:
+      - id: ruff
+        language_version: python3
+
+  # # The static type checker can be used to identify and locate errors in a program prior to its execution.
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.16.1
+  #   hooks:
+  #     - id: mypy
+  # # - repo: https://github.com/pre-commit/mirrors-mypy
+  # #   rev: 6e63c9e9c65e1df04465cdcda0f2490e89291f58
+  # #   hooks:
+  # #     - id: mypy
+  # #       exclude: ^(tests/|.*\.pyi$)
+  # #       language: system
+
+  # Check the commit messages on the current working tree.
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: acc9d9de6369b76d22cb4167029d2035e8730b98
+    hooks:
+      - id: gitlint

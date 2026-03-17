@@ -1,0 +1,40 @@
+[tool.poetry]
+name = "lab_1_example"
+description = "Training pipeline for deep learning model"
+authors = ["Name Surname <name.surname@gmail.com>"]
+version = "0.1.0"
+package-mode = false
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.isort]
+profile = "black"
+
+[tool.ruff]
+line-length = 100
+ignore = ["E501"]
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.13"
+torch = "2.2.0"
+torchvision = "0.17.0"
+tqdm = "4.66.1"
+matplotlib = "3.10.8"
+numpy = "2.4.3"
+pyyaml = "6.0.1"
+scipy = "1.17.1"
+pandas = "3.0.1"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "1.16.1"
+ruff = "0.15.5"
+black = "26.1.0"
+isort = "8.0.0"
+pre-commit = "^4.5.0"
+types-pyyaml = "^6.0.12.20250915"
+types-requests = "^2.32.4.20260107"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

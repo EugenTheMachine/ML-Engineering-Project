@@ -1,0 +1,14 @@
+*.jpg
+*.jpeg
+*.png
+
+cifar10/
+experiments/*
+!experiments/train0/*
+
+__pycache__/
+*.pyc
+src/__pycache__/
+src/*.pyc
+.ruff_cache
+.mypy_cache
