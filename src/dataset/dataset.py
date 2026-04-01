@@ -58,8 +58,6 @@ def get_data() -> tuple:
         stratify=labels,
     )
 
-    # NOTE: add barplots showing quality metrics for 10%/20%/30%/... data used for training
-
     # Split into training and validation sets
     train_images, val_images, train_labels, val_labels = train_test_split(
         images,
