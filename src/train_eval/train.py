@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import torch
 from torch.nn import CrossEntropyLoss
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 from torchvision.models import mobilenet_v2, regnet_y_400mf, resnet18
 
 from src.dataset.dataset import get_data
@@ -153,9 +153,6 @@ def train():
     model_name = cfg["model_name"]
     num_classes = cfg["num_classes"]
     batch_size = cfg["batch_size"]
-    train_ratio = cfg["train_data_ratio"]
-    val_ratio = cfg["val_data_ratio"]
-    test_ratio = cfg["test_data_ratio"]
 
     if model_name == "resnet18":
         model = resnet18(num_classes=num_classes)
@@ -170,17 +167,17 @@ def train():
 
     train_ds, val_ds, test_ds = get_data()
     train_loader = DataLoader(
-        Subset(train_ds, list(range(int(train_ratio * len(train_ds))))),
+        train_ds,
         batch_size=batch_size,
         shuffle=True,
     )
     val_loader = DataLoader(
-        Subset(val_ds, list(range(int(val_ratio * len(val_ds))))),
+        val_ds,
         batch_size=batch_size,
         shuffle=False,
     )
     test_loader = DataLoader(
-        Subset(test_ds, list(range(int(test_ratio * len(test_ds))))),
+        test_ds,
         batch_size=batch_size,
         shuffle=False,
     )
