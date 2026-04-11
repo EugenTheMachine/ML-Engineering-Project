@@ -3,7 +3,7 @@ Main training script.
 """
 import argparse
 import logging
-import os
+import re
 import shutil
 from pathlib import Path
 
@@ -129,6 +129,25 @@ def train_model(model, train_loader, val_loader, criterion, logger, out_dir, cfg
     return history
 
 
+def get_next_experiment_dir(
+    base_path: str = "experiments", prefix: str = "train"
+) -> Path:
+    root = Path(base_path)
+    root.mkdir(parents=True, exist_ok=True)
+
+    pattern = re.compile(rf"^{re.escape(prefix)}(\d{{2}})$")
+    existing_indices = []
+
+    for path in root.iterdir():
+        if path.is_dir():
+            match = pattern.match(path.name)
+            if match:
+                existing_indices.append(int(match.group(1)))
+
+    next_index = max(existing_indices, default=0) + 1
+    return root / f"{prefix}{next_index:02d}"
+
+
 def train(config_path: str = str(CFG_PATH), output_dir: str | None = None):
     """
     General wrapper for the training process.
@@ -138,19 +157,10 @@ def train(config_path: str = str(CFG_PATH), output_dir: str | None = None):
 
     if output_dir:
         out_dir = Path(output_dir)
-        if out_dir.exists():
-            shutil.rmtree(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
     else:
-        os.makedirs("experiments", exist_ok=True)
-        subdirs = [
-            int(f[5:])
-            for f in os.listdir("experiments")
-            if f.startswith("train") and f[5:].isdigit()
-        ] + [0]
-        n_past_experiments = sorted(subdirs)[-1]
-        out_dir = Path("experiments") / f"train{n_past_experiments + 1:02d}"
-        out_dir.mkdir(parents=True, exist_ok=True)
+        out_dir = get_next_experiment_dir("experiments")
+        out_dir.mkdir(parents=True, exist_ok=False)
 
     logger = setup_logger(out_dir / "train.log")
 

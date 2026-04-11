@@ -42,7 +42,7 @@ poetry run pre-commit run --all-files --config githooks.yml
 
 ## DVC Pipeline
 
-This repository includes a reproducible DVC pipeline with dataset download, training, and evaluation stages.
+This repository includes a reproducible DVC pipeline with dataset download and training stages. Model evaluation is performed as part of training, so a separate DVC evaluation stage is not required.
 
 ### Run the pipeline
 
@@ -54,8 +54,13 @@ dvc repro
 
 ```cmd
 python -m src.dataset.load_data --config src/config.yaml --output cifar10 --archive cifar-10-python.tar.gz --keep-archive --registry dataset_registry.csv
-python -m src.train_eval.train --config src/config.yaml --output experiments/train
-python -m src.train_eval.eval --config src/config.yaml --model experiments/train/best.pt --output metrics/evaluation_metrics.json
+python -m src.train_eval.train --config src/config.yaml
+```
+
+### Optional manual evaluation
+
+```cmd
+python -m src.train_eval.eval --config src/config.yaml --model experiments/trainXX/best.pt --output metrics/evaluation_metrics.json
 ```
 
 ### DVC remote operations

@@ -1,0 +1,80 @@
+schema: '2.0'
+stages:
+  download:
+    cmd: python -m src.dataset.load_data --config src/config.yaml --output
+      cifar10 --archive cifar-10-python.tar.gz --keep-archive --registry
+      dataset_registry.csv
+    deps:
+    - path: src/dataset/load_data.py
+      hash: md5
+      md5: 58a322dc3b539763c76f440570d72e6d
+      size: 7363
+    - path: src/utils.py
+      hash: md5
+      md5: f4521a7590f9c117529016f453d8b159
+      size: 974
+    params:
+      src/config.yaml:
+        archive_name: cifar-10-python.tar.gz
+        data_dir: cifar10
+        data_url: https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz
+        dataset_registry_path: dataset_registry.csv
+        download_keep_archive: true
+    outs:
+    - path: cifar10
+      hash: md5
+      md5: 2fdca18b05eda714c641ddbf6ae6e0ba.dir
+      size: 356712185
+      nfiles: 9
+    - path: dataset_registry.csv
+      hash: md5
+      md5: 043b8b4495a6cc6d4fdc252ee7f73f31
+      size: 274
+  train:
+    cmd: python -m src.train_eval.train --config src/config.yaml
+    deps:
+    - path: cifar10
+      hash: md5
+      md5: 2fdca18b05eda714c641ddbf6ae6e0ba.dir
+      size: 356712185
+      nfiles: 9
+    - path: src/dataset/augmentations.py
+      hash: md5
+      md5: c719eb34eed7cd0c52da58a0f06daf06
+      size: 2272
+    - path: src/dataset/dataset.py
+      hash: md5
+      md5: d9fd919d7549abf6f26f6cacf6ddcb09
+      size: 2605
+    - path: src/dataset/extract_data.py
+      hash: md5
+      md5: e2be9eedeff865efd0ac26251c79b897
+      size: 4252
+    - path: src/train_eval/eval.py
+      hash: md5
+      md5: 6b3cecf7a460ffb39e4bd0113e8c854e
+      size: 4210
+    - path: src/train_eval/train.py
+      hash: md5
+      md5: 26f9f38ecf1ccc019fa275d4c98d4c47
+      size: 7220
+    - path: src/train_eval/utils.py
+      hash: md5
+      md5: 12793cff07b5106c51836e1047df3fca
+      size: 2272
+    - path: src/utils.py
+      hash: md5
+      md5: f4521a7590f9c117529016f453d8b159
+      size: 974
+    params:
+      src/config.yaml:
+        batch_size: 128
+        data_dir: cifar10
+        device: cpu
+        epochs: 2
+        lr: 0.001
+        model_name: regnet_y_400mf
+        num_classes: 10
+        patience: 5
+        train_data_ratio: 0.01
+        val_ratio: 0.2

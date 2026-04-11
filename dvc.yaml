@@ -4,13 +4,14 @@ stages:
     deps:
       - src/dataset/load_data.py
       - src/utils.py
-      - src/config.yaml
+    params:
+      - src/config.yaml: [data_dir, data_url, archive_name, download_keep_archive, dataset_registry_path]
     outs:
       - cifar10
       - dataset_registry.csv
 
   train:
-    cmd: python -m src.train_eval.train --config src/config.yaml --output experiments/train
+    cmd: python -m src.train_eval.train --config src/config.yaml
     deps:
       - src/train_eval/train.py
       - src/train_eval/utils.py
@@ -19,22 +20,6 @@ stages:
       - src/dataset/extract_data.py
       - src/dataset/augmentations.py
       - src/utils.py
-      - src/config.yaml
       - cifar10
-    outs:
-      - experiments/train
-
-  evaluate:
-    cmd: python -m src.train_eval.eval --config src/config.yaml --model experiments/train/best.pt --output metrics/evaluation_metrics.json
-    deps:
-      - src/train_eval/eval.py
-      - src/train_eval/utils.py
-      - src/dataset/dataset.py
-      - src/dataset/extract_data.py
-      - src/utils.py
-      - src/config.yaml
-      - experiments/train/best.pt
-    outs:
-      - metrics/evaluation_metrics.json
-    metrics:
-      - metrics/evaluation_metrics.json
+    params:
+      - src/config.yaml: [data_dir, val_ratio, train_data_ratio, device, batch_size, epochs, lr, patience, model_name, num_classes]

@@ -15,5 +15,7 @@ src/__pycache__/
 src/*.pyc
 .ruff_cache
 .mypy_cache
-/cifar10
 !dataset_registry.csv
+/cifar10
+/dataset_registry.csv
+/experiments
