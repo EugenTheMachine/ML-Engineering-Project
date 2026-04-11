@@ -4,6 +4,7 @@ This module contains utilities for loading and processing CIFAR-10 dataset batch
 
 import logging
 import pickle
+import warnings
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -42,7 +43,12 @@ def load_batch(batch_path: Path) -> Dict:
     """
     try:
         with open(batch_path, "rb") as f:
-            batch = pickle.load(f, encoding="bytes")
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message=r"dtype\(\): align should be passed.*",
+                )
+                batch = pickle.load(f, encoding="bytes")
         logger.info(f"Successfully loaded batch from {batch_path}")
         return batch
     except FileNotFoundError:

@@ -1,0 +1,40 @@
+stages:
+  download:
+    cmd: python -m src.dataset.load_data --config src/config.yaml --output cifar10 --archive cifar-10-python.tar.gz --keep-archive --registry dataset_registry.csv
+    deps:
+      - src/dataset/load_data.py
+      - src/utils.py
+      - src/config.yaml
+    outs:
+      - cifar10
+      - dataset_registry.csv
+
+  train:
+    cmd: python -m src.train_eval.train --config src/config.yaml --output experiments/train
+    deps:
+      - src/train_eval/train.py
+      - src/train_eval/utils.py
+      - src/train_eval/eval.py
+      - src/dataset/dataset.py
+      - src/dataset/extract_data.py
+      - src/dataset/augmentations.py
+      - src/utils.py
+      - src/config.yaml
+      - cifar10
+    outs:
+      - experiments/train
+
+  evaluate:
+    cmd: python -m src.train_eval.eval --config src/config.yaml --model experiments/train/best.pt --output metrics/evaluation_metrics.json
+    deps:
+      - src/train_eval/eval.py
+      - src/train_eval/utils.py
+      - src/dataset/dataset.py
+      - src/dataset/extract_data.py
+      - src/utils.py
+      - src/config.yaml
+      - experiments/train/best.pt
+    outs:
+      - metrics/evaluation_metrics.json
+    metrics:
+      - metrics/evaluation_metrics.json

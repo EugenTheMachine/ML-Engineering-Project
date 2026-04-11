@@ -1,15 +1,19 @@
 """
-This module contains functional utils for downloading the archived dataset and extracting it
-into the data directory. The dataset is downloaded via the hyperlink provided.
+This module contains utilities for downloading, extracting, and registering the CIFAR-10 dataset.
+The script is designed to be used as a DVC pipeline stage.
 """
 
+import argparse
+import hashlib
 import logging
 import os
 import shutil
 import tarfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Union
 
+import pandas as pd
 import requests
 from tqdm import tqdm
 
@@ -22,26 +26,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def compute_file_md5(file_path: Union[str, Path]) -> str:
+    file_path = Path(file_path)
+    hash_md5 = hashlib.md5()
+    with file_path.open("rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+
 def download_dataset(url: str, output_path: Union[str, Path]) -> None:
-    """
-    Downloads the dataset from the provided URL and saves it to the specified output path.
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    Args:
-        url (str): The URL of the dataset to download.
-        output_path (Union[str, Path]): The path where the downloaded dataset will be saved.
-
-    Raises:
-        requests.exceptions.RequestException: If there is an issue with the HTTP request.
-        IOError: If there is an issue saving the file to disk.
-    """
     try:
-        response = requests.get(url, stream=True)
-        response.raise_for_status()  # Check if the request was successful
+        response = requests.get(url, stream=True, timeout=30)
+        response.raise_for_status()
 
         total_size = int(response.headers.get("content-length", 0))
         chunk_size = 8192
 
-        with open(output_path, "wb") as f:
+        with output_path.open("wb") as f:
             with tqdm(
                 total=total_size, unit="B", unit_scale=True, desc="Downloading"
             ) as pbar:
@@ -49,11 +54,13 @@ def download_dataset(url: str, output_path: Union[str, Path]) -> None:
                     f.write(chunk)
                     pbar.update(len(chunk))
 
-        logger.info(f"Dataset downloaded successfully and saved to {output_path}")
+        logger.info("Dataset downloaded successfully and saved to %s", output_path)
     except requests.exceptions.RequestException as e:
-        logger.error(f"An error occurred while downloading the dataset: {e}")
+        logger.error("An error occurred while downloading the dataset: %s", e)
+        raise
     except IOError as e:
-        logger.error(f"An error occurred while saving the dataset: {e}")
+        logger.error("An error occurred while saving the dataset: %s", e)
+        raise
 
 
 def extract_dataset(
@@ -61,38 +68,28 @@ def extract_dataset(
     extract_to: Union[str, Path],
     keep_archive: bool = False,
 ) -> None:
-    """
-    Extracts the dataset from the specified archive path to the given directory.
-    If the archive contains a single root folder, moves its contents to extract_to.
-
-    Args:
-        archive_path (Union[str, Path]): The path to the archived dataset file (tar.gz format).
-        extract_to (Union[str, Path]): The directory where the dataset will be extracted.
-        keep_archive (bool): Whether to keep the original archive file.
-
-    Raises:
-        IOError: If there is an issue with reading the archive or writing the extracted files.
-        tarfile.ReadError: If the archive file is not a valid tar.gz file.
-    """
     extract_to = Path(extract_to)
-    os.makedirs(extract_to, exist_ok=True)
-    try:
-        logger.info(f"Starting extraction of archive: {archive_path}")
-        with tarfile.open(archive_path, "r:gz") as tar_ref:
-            tar_ref.extractall(path=extract_to)
+    extract_to.mkdir(parents=True, exist_ok=True)
 
-        # Check if all extracted files are in a single root folder
+    def identity_filter(tarinfo, path=None):
+        return tarinfo
+
+    try:
+        logger.info("Starting extraction of archive: %s", archive_path)
+        with tarfile.open(archive_path, "r:gz") as tar_ref:
+            tar_ref.extractall(path=extract_to, filter=identity_filter)
+
         extracted_items = list(extract_to.iterdir())
-        if extracted_items[0].is_dir():
+        if extracted_items and extracted_items[0].is_dir():
             root_folder = extracted_items[0]
             logger.info(
-                f"Found single root folder: {root_folder.name}. Moving contents to {extract_to}"
+                "Found single root folder: %s. Moving contents to %s",
+                root_folder.name,
+                extract_to,
             )
 
-            # Move all contents from the root folder to extract_to
             for item in root_folder.iterdir():
                 dest_path = extract_to / item.name
-                # Remove destination if it already exists
                 if dest_path.exists():
                     if dest_path.is_dir():
                         shutil.rmtree(dest_path)
@@ -100,51 +97,128 @@ def extract_dataset(
                         dest_path.unlink()
                 shutil.move(str(item), str(dest_path))
 
-            # Remove the now-empty root folder
             root_folder.rmdir()
             logger.info(
-                f"Successfully moved all contents from {root_folder.name} to {extract_to}"
+                "Successfully moved contents from %s to %s",
+                root_folder.name,
+                extract_to,
             )
 
-        logger.info(f"Dataset extracted successfully to {extract_to}")
+        logger.info("Dataset extracted successfully to %s", extract_to)
         if not keep_archive:
             os.remove(archive_path)
-            logger.info(f"Original archive {archive_path} has been removed.")
+            logger.info("Original archive %s has been removed.", archive_path)
         else:
-            logger.info(f"Original archive {archive_path} retained.")
+            logger.info("Original archive %s retained.", archive_path)
     except tarfile.ReadError as e:
-        logger.error(f"The provided file is not a valid tar.gz archive: {e}")
+        logger.error("The provided file is not a valid tar.gz archive: %s", e)
+        raise
     except IOError as e:
-        logger.error(f"An error occurred while extracting the dataset: {e}")
+        logger.error("An error occurred while extracting the dataset: %s", e)
+        raise
+
+
+def create_dataset_registry(
+    config: dict,
+    output_dir: Union[str, Path],
+    registry_path: Union[str, Path],
+    archive_file: Union[str, Path],
+    archive_hash: str,
+) -> None:
+    output_dir = Path(output_dir)
+    registry_path = Path(registry_path)
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+
+    registry = {
+        "dataset_name": "cifar10",
+        "data_dir": str(output_dir),
+        "source_url": config["data_url"],
+        "archive_name": config["archive_name"],
+        "archive_path": str(Path(archive_file)),
+        "archive_md5": archive_hash,
+        "downloaded_at": datetime.now(tz=timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
+    }
+
+    pd.DataFrame([registry]).to_csv(registry_path, index=False)
+    logger.info("Dataset registry written to %s", registry_path)
 
 
 def get_dataset(
     url: str,
     cfg_path: Union[str, Path],
-    archive_path: Union[str, Path],
+    archive_name: str,
+    output_path: Union[str, Path] = None,
     keep_archive: bool = False,
+    registry_path: Union[str, Path] = None,
 ) -> None:
-    """
-    Downloads and extracts the dataset from the provided URL.
+    config = get_cfg(cfg_path)
+    output_dir = Path(output_path or config["data_dir"])
+    archive_name = archive_name or config["archive_name"]
+    registry_path = registry_path or config["dataset_registry_path"]
 
-    Args:
-        url (str): The URL of the dataset to download.
-        cfg_path (Union[str, Path]): The path to the configuration file.
-        archive_path (Union[str, Path]): The path where the archived dataset will be saved.
-        extract_to (Union[str, Path]): The directory where the dataset will be extracted.
-        keep_archive (bool): Whether to keep the original archive file after extraction.
-    """
-    cfg = get_cfg(cfg_path)
-    extract_to = Path(cfg["data_dir"])
-    os.makedirs(extract_to, exist_ok=True)
-    download_dataset(url, extract_to / archive_path)
-    extract_dataset(extract_to / archive_path, extract_to, keep_archive)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    archive_path = output_dir / archive_name
+
+    data_files_exist = (
+        all((output_dir / f"data_batch_{i}").exists() for i in range(1, 6))
+        and (output_dir / "test_batch").exists()
+    )
+
+    if data_files_exist:
+        logger.info(
+            "Dataset already exists at %s, skipping download/extract.", output_dir
+        )
+    else:
+        download_dataset(url, archive_path)
+        extract_dataset(archive_path, output_dir, keep_archive)
+
+    archive_hash = compute_file_md5(archive_path) if archive_path.exists() else ""
+    create_dataset_registry(
+        config, output_dir, registry_path, archive_path, archive_hash
+    )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Download and extract CIFAR-10 dataset."
+    )
+    parser.add_argument(
+        "--url", type=str, default=None, help="Dataset URL to download."
+    )
+    parser.add_argument(
+        "--archive", type=str, default=None, help="Archive filename to download."
+    )
+    parser.add_argument(
+        "--config", type=str, default=str(CFG_PATH), help="Path to the parameter file."
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Output directory for extracted dataset.",
+    )
+    parser.add_argument(
+        "--keep-archive", action="store_true", help="Keep the archive after extraction."
+    )
+    parser.add_argument(
+        "--registry",
+        type=str,
+        default=None,
+        help="Path to save the dataset registry CSV.",
+    )
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
+    args = parse_args()
+    cfg = get_cfg(args.config)
     get_dataset(
-        "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz",
-        CFG_PATH,
-        "cifar10.tar.gz",
-        True,
+        url=args.url or cfg["data_url"],
+        cfg_path=args.config,
+        archive_name=args.archive or cfg["archive_name"],
+        output_path=args.output,
+        keep_archive=args.keep_archive or cfg.get("download_keep_archive", False),
+        registry_path=args.registry,
     )

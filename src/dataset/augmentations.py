@@ -53,7 +53,8 @@ def get_augmentation_pipeline(subset: str):
     if subset != "train":
         pipeline = v2.Compose(
             [
-                v2.ToTensor(),  # Converts numpy HWC uint8 [0,255] to CHW float32 [0,1.0]
+                v2.ToImage(),
+                v2.ToDtype(torch.float32, scale=True),
                 v2.Normalize(mean=imagenet_mean, std=imagenet_std),
             ]
         )
@@ -62,9 +63,7 @@ def get_augmentation_pipeline(subset: str):
             [
                 v2.ToImage(),
                 v2.TrivialAugmentWide(interpolation=v2.InterpolationMode.BILINEAR),
-                v2.ToDtype(
-                    torch.float32, scale=True
-                ),  # Alternative to ToTensor that allows scaling
+                v2.ToDtype(torch.float32, scale=True),
                 v2.Normalize(mean=imagenet_mean, std=imagenet_std),
             ]
         )

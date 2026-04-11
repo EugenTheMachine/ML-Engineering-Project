@@ -1,0 +1,2 @@
+dataset_name,data_dir,source_url,archive_name,archive_path,archive_md5,downloaded_at
+cifar10,cifar10,https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz,cifar-10-python.tar.gz,cifar10\cifar-10-python.tar.gz,c58f30108f718f92721af3b95e74349a,2026-04-11T07:08:26.304762Z

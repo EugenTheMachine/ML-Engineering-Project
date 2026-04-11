@@ -43,7 +43,7 @@ def get_data() -> tuple:
     Returns:
         tuple: (train_images, train_labels), (val_images, val_labels)
     """
-    cfg = get_cfg("src/config.yaml")
+    cfg = get_cfg()
     data_dir = Path(cfg["data_dir"])
 
     # Load training data
