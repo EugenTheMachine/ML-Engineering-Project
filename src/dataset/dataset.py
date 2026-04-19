@@ -50,13 +50,14 @@ def get_data() -> tuple:
     images, labels = extract_cifar10_data(data_dir, subset="train")
 
     # keep only a fraction of the training data for training
-    images, _, labels, _ = train_test_split(
-        images,
-        labels,
-        test_size=1 - cfg["train_data_ratio"],
-        random_state=cfg["seed"],
-        stratify=labels,
-    )
+    if cfg["train_data_ratio"] < 1.0:
+        images, _, labels, _ = train_test_split(
+            images,
+            labels,
+            test_size=1 - cfg["train_data_ratio"],
+            random_state=cfg["seed"],
+            stratify=labels,
+        )
 
     # Split into training and validation sets
     train_images, val_images, train_labels, val_labels = train_test_split(

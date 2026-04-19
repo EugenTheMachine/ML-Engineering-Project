@@ -15,6 +15,12 @@ src/__pycache__/
 src/*.pyc
 .ruff_cache
 .mypy_cache
+/.venv
+.env
+.pytest_cache
+mlruns/
+.ipynb_checkpoints/
+.DS_Store
 !dataset_registry.csv
 /cifar10
 /dataset_registry.csv

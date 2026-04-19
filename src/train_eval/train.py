@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import mlflow
 import pandas as pd
 import torch
 from torch.nn import CrossEntropyLoss
@@ -96,6 +97,17 @@ def train_model(model, train_loader, val_loader, criterion, logger, out_dir, cfg
             val_f1,
         )
 
+        # Log epoch metrics to MLflow (step = epoch)
+        try:
+            mlflow.log_metric("train_loss", float(train_loss), step=epoch)
+            mlflow.log_metric("val_loss", float(val_loss), step=epoch)
+            mlflow.log_metric("val_acc", float(val_acc), step=epoch)
+            mlflow.log_metric("val_precision", float(val_precision), step=epoch)
+            mlflow.log_metric("val_recall", float(val_recall), step=epoch)
+            mlflow.log_metric("val_f1", float(val_f1), step=epoch)
+        except Exception:
+            pass
+
         if val_loss < best_loss:
             best_loss = val_loss
             epochs_no_improve = 0
@@ -148,7 +160,13 @@ def get_next_experiment_dir(
     return root / f"{prefix}{next_index:02d}"
 
 
-def train(config_path: str = str(CFG_PATH), output_dir: str | None = None):
+def train(
+    config_path: str = str(CFG_PATH),
+    output_dir: str | None = None,
+    mlflow_experiment: str | None = None,
+    run_name: str | None = None,
+    tracking_uri: str | None = None,
+):
     """
     General wrapper for the training process.
     Sets up logging, loads data, initializes model and starts training.
@@ -185,25 +203,79 @@ def train(config_path: str = str(CFG_PATH), output_dir: str | None = None):
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
 
     criterion = CrossEntropyLoss()
-    train_history = train_model(
-        model, train_loader, val_loader, criterion, logger, out_dir, cfg
-    )
+    # allow overriding MLflow settings from function args
+    if mlflow_experiment:
+        cfg["mlflow_experiment"] = mlflow_experiment
+    if run_name:
+        cfg["run_name"] = run_name
+    if tracking_uri:
+        cfg["mlflow_tracking_uri"] = tracking_uri
 
-    model.load_state_dict(torch.load(out_dir / "best.pt"))
-    test_acc, test_precision, test_recall, test_f1, test_loss = eval_model(
-        model, test_loader, criterion, torch.device(cfg["device"])
-    )
+    # MLflow experiment setup
+    tracking_uri = cfg.get("mlflow_tracking_uri", None)
+    if tracking_uri:
+        mlflow.set_tracking_uri(tracking_uri)
+    else:
+        # default local mlruns folder
+        mlflow.set_tracking_uri("file:./mlruns")
 
+    experiment_name = cfg.get("mlflow_experiment", "default")
+    mlflow.set_experiment(experiment_name)
+
+    run_name = cfg.get("run_name") or f"{out_dir.name} - Stage: Model Training"
+
+    with mlflow.start_run(run_name=run_name):
+        # Log configuration parameters
+        for k, v in cfg.items():
+            try:
+                # mlflow expects primitives; serialize others
+                if isinstance(v, (int, float, str, bool)):
+                    mlflow.log_param(k, v)
+                else:
+                    mlflow.log_param(k, str(v))
+            except Exception:
+                pass
+
+        train_history = train_model(
+            model, train_loader, val_loader, criterion, logger, out_dir, cfg
+        )
+
+        # Load best model and evaluate on test set
+        model.load_state_dict(torch.load(out_dir / "best.pt"))
+        test_acc, test_precision, test_recall, test_f1, test_loss = eval_model(
+            model, test_loader, criterion, torch.device(cfg["device"])
+        )
+
+        # Log test metrics
+        try:
+            mlflow.log_metric("test_loss", float(test_loss))
+            mlflow.log_metric("test_acc", float(test_acc))
+            mlflow.log_metric("test_precision", float(test_precision))
+            mlflow.log_metric("test_recall", float(test_recall))
+            mlflow.log_metric("test_f1", float(test_f1))
+        except Exception:
+            pass
+
+        # Log artifacts: model weights and training files
+        try:
+            mlflow.log_artifact(str(out_dir / "best.pt"))
+            mlflow.log_artifact(str(out_dir / "last.pt"))
+        except Exception:
+            pass
+
+        for fname in ["training_history.csv", "loss_plot.png", Path(config_path).name]:
+            p = out_dir / fname
+            if p.exists():
+                try:
+                    mlflow.log_artifact(str(p))
+                except Exception:
+                    pass
+
+    # end mlflow run
+
+    # copy config into experiment artifacts directory (already logged to MLflow)
     shutil.copy(config_path, out_dir / Path(config_path).name)
 
-    logger.info(
-        "Test Loss: %.4f | Test Acc: %.4f | Test Precision: %.4f | Test Recall: %.4f | Test F1: %.4f",
-        test_loss,
-        test_acc,
-        test_precision,
-        test_recall,
-        test_f1,
-    )
     logger.info("Experiment artifacts saved to: %s", out_dir)
 
     for handler in logger.handlers[:]:
@@ -224,9 +296,33 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional output directory for training artifacts.",
     )
+    parser.add_argument(
+        "--mlflow-experiment",
+        type=str,
+        default=None,
+        help="MLflow experiment name to use (overrides config).",
+    )
+    parser.add_argument(
+        "--run-name",
+        type=str,
+        default=None,
+        help="MLflow run name to use (overrides config).",
+    )
+    parser.add_argument(
+        "--mlflow-tracking-uri",
+        type=str,
+        default=None,
+        help="MLflow tracking URI (overrides config).",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    train(config_path=args.config, output_dir=args.output)
+    train(
+        config_path=args.config,
+        output_dir=args.output,
+        mlflow_experiment=args.mlflow_experiment,
+        run_name=args.run_name,
+        tracking_uri=args.mlflow_tracking_uri,
+    )

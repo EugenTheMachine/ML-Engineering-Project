@@ -57,6 +57,28 @@ python -m src.dataset.load_data --config src/config.yaml --output cifar10 --arch
 python -m src.train_eval.train --config src/config.yaml
 ```
 
+## MLflow Tracking
+
+Install MLflow (poetry updated - run install):
+
+```bash
+poetry install
+```
+
+Start MLflow UI (local file backend):
+
+```bash
+mlflow ui --backend-store-uri file:./mlruns --default-artifact-root ./mlruns
+```
+
+Then run training. You can set MLflow experiment and run name either in `src/config.yaml` (add `mlflow_experiment` and `run_name` keys) or pass them as CLI args:
+
+```bash
+python -m src.train_eval.train --config src/config.yaml --mlflow-experiment "my-experiment" --run-name "Experiment 1 - Stage 2: Model Training"
+```
+
+The training script will log config parameters, epoch-wise metrics, final test metrics, and artifacts (`best.pt`, `last.pt`, `training_history.csv`, `loss_plot.png`) to the MLflow run.
+
 ### Optional manual evaluation
 
 ```cmd
