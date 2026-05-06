@@ -15,6 +15,7 @@ from torch.nn import CrossEntropyLoss
 from torch.utils.data import DataLoader
 from torchvision.models import mobilenet_v2, regnet_y_400mf, resnet18
 
+import wandb
 from src.dataset.dataset import get_data
 from src.train_eval.eval import eval_model
 from src.train_eval.utils import train_epoch
@@ -44,7 +45,29 @@ def setup_logger(log_path):
     return logger
 
 
-def train_model(model, train_loader, val_loader, criterion, logger, out_dir, cfg):
+def init_wandb(cfg: dict, run_name: str, logger: logging.Logger) -> bool:
+    """Initialize Weights & Biases for the current experiment run."""
+    project_name = cfg.get("mlflow_experiment", "default")
+    wandb_config = {
+        k: v for k, v in cfg.items() if isinstance(v, (int, float, str, bool))
+    }
+    try:
+        wandb.init(
+            project=project_name,
+            name=run_name,
+            config=wandb_config,
+            reinit=True,
+            entity="lazoskal24-national-technical-university-kharkiv-polytec",
+        )
+        return True
+    except Exception as exc:
+        logger.warning("W&B initialization failed: %s", exc)
+        return False
+
+
+def train_model(
+    model, train_loader, val_loader, criterion, logger, out_dir, cfg, use_wandb: bool
+):
     """
     Main training loop for the model.
     """
@@ -107,6 +130,22 @@ def train_model(model, train_loader, val_loader, criterion, logger, out_dir, cfg
             mlflow.log_metric("val_f1", float(val_f1), step=epoch)
         except Exception:
             pass
+
+        if use_wandb:
+            try:
+                wandb.log(
+                    {
+                        "train_loss": float(train_loss),
+                        "val_loss": float(val_loss),
+                        "val_acc": float(val_acc),
+                        "val_precision": float(val_precision),
+                        "val_recall": float(val_recall),
+                        "val_f1": float(val_f1),
+                    },
+                    step=epoch,
+                )
+            except Exception:
+                pass
 
         if val_loss < best_loss:
             best_loss = val_loss
@@ -236,8 +275,10 @@ def train(
             except Exception:
                 pass
 
+        use_wandb = init_wandb(cfg, run_name, logger)
+
         train_history = train_model(
-            model, train_loader, val_loader, criterion, logger, out_dir, cfg
+            model, train_loader, val_loader, criterion, logger, out_dir, cfg, use_wandb
         )
 
         # Load best model and evaluate on test set
@@ -263,7 +304,12 @@ def train(
         except Exception:
             pass
 
-        for fname in ["training_history.csv", "loss_plot.png", Path(config_path).name]:
+        for fname in [
+            "training_history.csv",
+            "loss_plot.png",
+            "train.log",
+            Path(config_path).name,
+        ]:
             p = out_dir / fname
             if p.exists():
                 try:
@@ -271,7 +317,28 @@ def train(
                 except Exception:
                     pass
 
+        if use_wandb:
+            try:
+                artifact = wandb.Artifact("model-artifact", type="model")
+                for fname in [
+                    "best.pt",
+                    "last.pt",
+                    "training_history.csv",
+                    "loss_plot.png",
+                    "train.log",
+                    Path(config_path).name,
+                ]:
+                    p = out_dir / fname
+                    if p.exists():
+                        artifact.add_file(str(p))
+                wandb.log_artifact(artifact)
+            except Exception:
+                pass
+
     # end mlflow run
+
+    if use_wandb:
+        wandb.finish()
 
     # copy config into experiment artifacts directory (already logged to MLflow)
     shutil.copy(config_path, out_dir / Path(config_path).name)

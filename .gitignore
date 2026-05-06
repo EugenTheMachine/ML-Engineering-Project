@@ -25,3 +25,4 @@ mlruns/
 /cifar10
 /dataset_registry.csv
 /experiments
+wandb/
