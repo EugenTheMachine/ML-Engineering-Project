@@ -1,6 +1,7 @@
 """
 This module contains utility functions for loading configuration files and other common tasks.
 """
+import logging
 from pathlib import Path
 from typing import Union
 
@@ -26,8 +27,8 @@ def get_cfg(config_path: Union[str, Path] = CFG_PATH) -> dict:
             cfg = yaml.safe_load(f)
         return cfg
     except FileNotFoundError:
-        print(f"Configuration file not found: {config_path}")
+        logging.error("Configuration file not found: %s", config_path)
         raise
-    except yaml.YAMLError as e:
-        print(f"Error parsing YAML file: {e}")
+    except yaml.YAMLError as yaml_err:
+        logging.error("Error parsing YAML file: %s", yaml_err)
         raise

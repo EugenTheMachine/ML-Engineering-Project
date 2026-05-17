@@ -79,6 +79,27 @@ python -m src.train_eval.train --config src/config.yaml --mlflow-experiment "my-
 
 The training script will log config parameters, epoch-wise metrics, final test metrics, and artifacts (`best.pt`, `last.pt`, `training_history.csv`, `loss_plot.png`) to the MLflow run.
 
+## Streamlit Dashboard
+
+Run the interactive dashboard with the following command from the repository root:
+
+```bash
+streamlit run app.py
+```
+
+If you are using Poetry, launch it with:
+
+```bash
+poetry run streamlit run app.py
+```
+
+If the app cannot find local modules, set the project root on `PYTHONPATH` first:
+
+```bash
+set PYTHONPATH=%CD%
+poetry run streamlit run app.py
+```
+
 ### Optional manual evaluation
 
 ```cmd
