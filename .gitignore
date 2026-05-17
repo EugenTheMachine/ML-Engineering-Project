@@ -26,3 +26,4 @@ mlruns/
 /dataset_registry.csv
 /experiments
 wandb/
+*.txt

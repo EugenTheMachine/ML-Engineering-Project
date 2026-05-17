@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from PIL import Image
@@ -139,21 +138,58 @@ def generate_gradcam_overlay(
         *(list(model.children())[-2:-1] + [Flatten()] + list(model.children())[-1:])
     )
     model = model.eval()
-    tensor, _ = prepare_image(raw_image)
-    pred = Variable(tensor, requires_grad=True)
-    prob, class_cl = torch.topk(
-        nn.Softmax(dim=1)(model(pred)), 3
-    )  # Returns the k largest elements of the given input tensor along a given dimension.
-    gradcam = GradCAM(pred, int(class_cl[0][0]), f_ex, classification)
+
+    # Use the input_tensor from the arguments instead of double-normalizing
+    pred = Variable(input_tensor.detach(), requires_grad=True)
+
+    if target_category is not None:
+        explain_class = target_category
+    else:
+        prob, class_cl = torch.topk(nn.Softmax(dim=1)(model(pred)), 3)
+        explain_class = int(class_cl[0][0])
+
+    gradcam = GradCAM(pred, explain_class, f_ex, classification)
     gradcam = Image.fromarray(gradcam)
-    gradcam = gradcam.resize(raw_image.shape[:2], resample=Image.BILINEAR)
+    gradcam = gradcam.resize(
+        (raw_image.shape[1], raw_image.shape[0]), resample=Image.BILINEAR
+    )
 
-    plt.imshow(raw_image)
-    plt.axis("off")
-    plt.imshow(np.array(gradcam), alpha=0.5, cmap="jet")
-    plt.savefig("result.png")
+    # Convert gradcam to numpy array
+    heatmap = np.array(gradcam)
 
-    return cv2.imread("result.png")
+    # Normalize heatmap to 0-255
+    h_min, h_max = heatmap.min(), heatmap.max()
+    if h_max > h_min:
+        heatmap = (heatmap - h_min) / (h_max - h_min)
+    else:
+        heatmap = np.zeros_like(heatmap)
+    heatmap = np.uint8(255 * heatmap)
+
+    # Apply JET colormap
+    heatmap_colored = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+
+    # Convert BGR -> RGB
+    heatmap_colored = cv2.cvtColor(heatmap_colored, cv2.COLOR_BGR2RGB)
+
+    # Ensure raw_image is uint8 and RGB
+    base_image = raw_image.copy()
+    if base_image.dtype != np.uint8:
+        base_image = np.clip(base_image * 255.0, 0, 255).astype(np.uint8)
+    if base_image.shape[2] == 4:
+        base_image = base_image[..., :3]
+
+    # Blend images additively to maintain brightness
+    heatmap_colored_f = heatmap_colored.astype(np.float32) / 255.0
+    base_image_f = base_image.astype(np.float32) / 255.0
+
+    alpha = 0.5
+    cam = (1.0 - alpha) * base_image_f + alpha * heatmap_colored_f
+    cam_max = np.max(cam)
+    if cam_max > 0:
+        cam = cam / cam_max
+
+    result = np.uint8(255 * cam)
+    return result
 
 
 def get_class_name(index: int) -> str:
